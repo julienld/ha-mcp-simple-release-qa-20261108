@@ -95,9 +95,14 @@ jobs:
       env:
         QA_DEPLOY_KEY: ${{ secrets.INTEGRATION_MIRROR_DEPLOY_KEY }}
     - name: Wait for the build on PyPI
-      run: "for _ in $(seq 1 60); do\n  if curl -fsS -o /dev/null \"https://julienld.github.io/ha-mcp-simple-mirror-qa-20261108/pypi/ha-mcp/${VERSION}/json\"\
-        ; then\n    echo \"PyPI serves ha-mcp ${VERSION}\"\n    exit 0\n  fi\n  sleep 30\ndone\necho \"::error::PyPI never\
-        \ served ha-mcp ${VERSION}; leaving the release draft.\"\nexit 1\n"
+      run: "for _ in $(seq 1 \"$QA_POLL_ATTEMPTS\"); do\n  if curl -fsS -o /dev/null \"${QA_PYPI_JSON_ROOT}/ha-mcp/${VERSION}/json\"\
+        ; then\n    echo \"PyPI serves ha-mcp ${VERSION}\"\n    exit 0\n  fi\n  sleep \"$QA_POLL_DELAY\"\ndone\necho \"::error::PyPI\
+        \ never served ha-mcp ${VERSION}; leaving the release draft.\"\nexit 1\n"
+      env:
+        QA_PYPI_JSON_ROOT: ${{ vars.QA_HIDE_PACKAGE == 'true' && 'https://julienld.github.io/ha-mcp-simple-mirror-qa-20261108/not-published/pypi'
+          || 'https://julienld.github.io/ha-mcp-simple-mirror-qa-20261108/pypi' }}
+        QA_POLL_ATTEMPTS: ${{ vars.QA_HIDE_PACKAGE == 'true' && '3' || '60' }}
+        QA_POLL_DELAY: ${{ vars.QA_HIDE_PACKAGE == 'true' && '3' || '30' }}
     - name: Generate GitHub App token for publication
       id: app-token
       uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
