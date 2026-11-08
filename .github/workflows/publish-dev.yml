@@ -200,19 +200,22 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         VERSION: ${{ needs.prepare.outputs.dev_version }}
         SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
-      run: "TAG=\"v${VERSION}\"\n\nif DRAFT=$(gh release view \"$TAG\" --json isDraft --jq .isDraft 2>&1); then\n  if [ \"\
-        $DRAFT\" = false ]; then\n    echo \"release already published; preserving its assets\"\n    exit 0\n  fi\n  echo\
-        \ \"::error::An incomplete draft exists for ${TAG}; inspect it before retrying.\"\n  exit 1\nelif ! printf '%s' \"\
-        $DRAFT\" | grep -qi 'release not found'; then\n  echo \"::error::Could not read release ${TAG}: ${DRAFT}\"\n  exit\
-        \ 1\nfi\n\n# One line per pull request merged since the previous dev build,\n# then the other ways to install this\
-        \ build.\npython3 scripts/build_mirror_release_notes.py \\\n  --dev-pin \"$VERSION\" --dist ha-mcp-dev \\\n  --source\
-        \ \"$GITHUB_SHA\" --source-label \"${GITHUB_REPOSITORY}@${SHORT_SHA}\" \\\n  --out release_notes.md\ncat >> release_notes.md\
-        \ << EOF\n\n### Other installs\n\n**Docker (dev channel):** \\`docker pull ghcr.io/${GITHUB_REPOSITORY}:dev\\`\n\n\
-        **PyPI (dev channel):** \\`pip install ha-mcp-dev\\`\nEOF\n\n# Retry an unpublished tag left by a failed create. Public\
-        \ releases\n# exit above so their assets and download history are preserved.\ngit tag -f \"$TAG\" HEAD\ngit push --quiet\
-        \ --force \"https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git\" \"refs/tags/$TAG\"\ngh release\
-        \ create \"$TAG\" dist/integration/ha_mcp_tools.zip \\\n  --verify-tag \\\n  --title \"Dev Build $VERSION\" \\\n \
-        \ --notes-file release_notes.md \\\n  --prerelease\n\necho \"\u2713 Created pre-release $TAG\"\n"
+      run: "TAG=\"v${VERSION}\"\n\nRELEASE=$(gh api graphql \\\n  -f query='query($owner: String!, $name: String!, $tag: String!)\
+        \ { repository(owner: $owner, name: $name) { release(tagName: $tag) { isDraft } } }' \\\n  -f owner=\"${GITHUB_REPOSITORY%%/*}\"\
+        \ -f name=\"${GITHUB_REPOSITORY#*/}\" -f tag=\"$TAG\" \\\n  --jq '.data.repository.release | if . == null then \"\
+        absent\" elif .isDraft then \"draft\" else \"published\" end')\nif [ \"$RELEASE\" = published ]; then\n  echo \"release\
+        \ already published; preserving its assets\"\n  exit 0\nelif [ \"$RELEASE\" = draft ]; then\n  echo \"::error::An\
+        \ incomplete draft exists for ${TAG}; inspect it before retrying.\"\n  exit 1\nelif [ \"$RELEASE\" != absent ]; then\n\
+        \  echo \"::error::Unexpected release lookup result: ${RELEASE}\"\n  exit 1\nfi\n\n# One line per pull request merged\
+        \ since the previous dev build,\n# then the other ways to install this build.\npython3 scripts/build_mirror_release_notes.py\
+        \ \\\n  --dev-pin \"$VERSION\" --dist ha-mcp-dev \\\n  --source \"$GITHUB_SHA\" --source-label \"${GITHUB_REPOSITORY}@${SHORT_SHA}\"\
+        \ \\\n  --out release_notes.md\ncat >> release_notes.md << EOF\n\n### Other installs\n\n**Docker (dev channel):**\
+        \ \\`docker pull ghcr.io/${GITHUB_REPOSITORY}:dev\\`\n\n**PyPI (dev channel):** \\`pip install ha-mcp-dev\\`\nEOF\n\
+        \n# Retry an unpublished tag left by a failed create. Public releases\n# exit above so their assets and download history\
+        \ are preserved.\ngit tag -f \"$TAG\" HEAD\ngit push --quiet --force \"https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git\"\
+        \ \"refs/tags/$TAG\"\ngh release create \"$TAG\" dist/integration/ha_mcp_tools.zip \\\n  --verify-tag \\\n  --title\
+        \ \"Dev Build $VERSION\" \\\n  --notes-file release_notes.md \\\n  --prerelease\n\necho \"\u2713 Created pre-release\
+        \ $TAG\"\n"
   cleanup-old-prereleases:
     name: Cleanup old pre-releases
     needs: create-prerelease
