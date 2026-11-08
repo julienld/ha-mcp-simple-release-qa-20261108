@@ -29,17 +29,18 @@ jobs:
       run: "VER=\"${GITHUB_REF_NAME#v}\"\n# Check existence explicitly instead of `|| echo \"release exists\"`:\n# that pattern\
         \ treated EVERY create failure (auth, rate limit, bad\n# notes file) as already-exists and reported green with no\
         \ release\n# published (review finding). Now only a genuine duplicate no-ops;\n# a real create failure fails the job\
-        \ visibly.\nif DRAFT=$(gh release view \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" --json isDraft --jq .isDraft);\
-        \ then\n  if [ \"$DRAFT\" = false ]; then\n    echo \"release already published; preserving its assets\"\n    exit\
-        \ 0\n  fi\n  echo \"::error::An incomplete draft exists for ${GITHUB_REF_NAME}; inspect it before retrying.\"\n  exit\
-        \ 1\nfi\nASSETS=()\nif python3 -c 'import json,sys; sys.exit(not json.load(open(\"hacs.json\")).get(\"zip_release\"\
-        , False))'; then\n  SOURCE_TAG=\"${GITHUB_REF_NAME/-dev./.dev}\"\n  mkdir -p dist/integration\n  gh release download\
-        \ \"$SOURCE_TAG\" --repo julienld/ha-mcp-simple-release-qa-20261108 \\\n    --pattern ha_mcp_tools.zip --dir dist/integration\n\
-        \  ASSETS=(dist/integration/ha_mcp_tools.zip)\nfi\n# -dev. tags are the dev channel: the prerelease flag is what keeps\n\
-        # them away from stable HACS users (HACS filters on it unless the\n# repository's \"Pre-release\" switch entity is\
-        \ on) and out of\n# GitHub's \"latest\" release.\nPRERELEASE_FLAG=\"\"\ncase \"$GITHUB_REF_NAME\" in\n  *-dev.*) PRERELEASE_FLAG=\"\
-        --prerelease\" ;;\nesac\ngh release create \"$GITHUB_REF_NAME\" \"${ASSETS[@]}\" --repo \"$GITHUB_REPOSITORY\" \\\n\
-        \  --title \"$VER\" -F /tmp/notes.md $PRERELEASE_FLAG\n"
+        \ visibly.\nif DRAFT=$(gh release view \"$GITHUB_REF_NAME\" --repo \"$GITHUB_REPOSITORY\" --json isDraft --jq .isDraft\
+        \ 2>&1); then\n  if [ \"$DRAFT\" = false ]; then\n    echo \"release already published; preserving its assets\"\n\
+        \    exit 0\n  fi\n  echo \"::error::An incomplete draft exists for ${GITHUB_REF_NAME}; inspect it before retrying.\"\
+        \n  exit 1\nelif ! printf '%s' \"$DRAFT\" | grep -qi 'release not found'; then\n  echo \"::error::Could not read release\
+        \ ${GITHUB_REF_NAME}: ${DRAFT}\"\n  exit 1\nfi\nASSETS=()\nif python3 -c 'import json,sys; sys.exit(not json.load(open(\"\
+        hacs.json\")).get(\"zip_release\", False))'; then\n  SOURCE_TAG=\"${GITHUB_REF_NAME/-dev./.dev}\"\n  mkdir -p dist/integration\n\
+        \  gh release download \"$SOURCE_TAG\" --repo julienld/ha-mcp-simple-release-qa-20261108 \\\n    --pattern ha_mcp_tools.zip\
+        \ --dir dist/integration\n  ASSETS=(dist/integration/ha_mcp_tools.zip)\nfi\n# -dev. tags are the dev channel: the\
+        \ prerelease flag is what keeps\n# them away from stable HACS users (HACS filters on it unless the\n# repository's\
+        \ \"Pre-release\" switch entity is on) and out of\n# GitHub's \"latest\" release.\nPRERELEASE_FLAG=\"\"\ncase \"$GITHUB_REF_NAME\"\
+        \ in\n  *-dev.*) PRERELEASE_FLAG=\"--prerelease\" ;;\nesac\ngh release create \"$GITHUB_REF_NAME\" \"${ASSETS[@]}\"\
+        \ --repo \"$GITHUB_REPOSITORY\" \\\n  --title \"$VER\" -F /tmp/notes.md $PRERELEASE_FLAG\n"
     - name: Retire superseded dev pre-releases
       if: ${{ !contains(github.ref_name, '-dev.') }}
       env:
