@@ -87,33 +87,3 @@ jobs:
         \n      exit 1\n    }\n  done\n  echo \"::error::Could not push addon config.yaml update after 5 attempts.\"\n  exit\
         \ 1\nfi\n"
     if: ${{ vars.QA_ARMED == 'true' && github.sha != vars.QA_BOOTSTRAP_SHA && (true) }}
-  qa_receipt:
-    name: QA workflow receipt
-    needs:
-    - update-addon-config
-    if: ${{ always() && vars.QA_ARMED == 'true' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      with:
-        persist-credentials: false
-        ref: ${{ github.workflow_sha }}
-    - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
-      with:
-        version: 0.13.4
-    - run: uv run -s .qa/record.py
-      env:
-        QA_NEEDS: ${{ toJSON(needs) }}
-        QA_STAGE: ${{ vars.QA_STAGE }}
-        GH_TOKEN: ${{ github.token }}
-        QA_REPORT_FAILURES: 'false'
-        QA_OBSERVER_PR: ${{ vars.QA_OBSERVER_PR }}
-        QA_OBSERVER_SHA: ${{ vars.QA_OBSERVER_SHA }}
-        QA_FAIL_DOCKER: ${{ vars.QA_FAIL_DOCKER }}
-    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-      with:
-        name: qa-workflow-receipt
-        path: qa-workflow-receipt.json
-        retention-days: 30
