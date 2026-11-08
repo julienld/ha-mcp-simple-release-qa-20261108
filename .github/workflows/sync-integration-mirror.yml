@@ -63,7 +63,7 @@ jobs:
         \ Dev Channel never built ${GITHUB_SHA}; nothing to pin.\"\n      exit 1\n    fi\n    TRIGGER_WORKFLOW=\"Publish Dev\
         \ Channel\"\n    ;;\nesac\nif [ \"$TRIGGER_CONCLUSION\" = \"skipped\" ]; then\n  echo \"Triggering run was skipped\
         \ in its entirety - nothing to sync.\"\n  echo \"channel=skip\" >> \"$GITHUB_OUTPUT\"\n  exit 0\nfi\nif [ \"$TRIGGER_WORKFLOW\"\
-        \ = \"Release Publish\" ]; then\n  job=\"Publish PyPI package\"; leg=stable\nelse\n  job=\"Publish PyPI (dev channel)\"\
+        \ = \"Release Publish\" ]; then\n  job=\"Publish PyPI package\"; leg=stable\nelse\n  job=\"Create GitHub pre-release\"\
         ; leg=dev\nfi\nif ! conclusion=$(gh api \\\n  \"repos/${{ github.repository }}/actions/runs/${TRIGGER_RUN_ID}/jobs?per_page=100\"\
         \ \\\n  --jq \"[.jobs[] | select(.name == \\\"$job\\\") | .conclusion] | first // empty\"); then\n  if [ \"$EVENT\"\
         \ = workflow_dispatch ]; then\n    # A maintainer asked for this pre-release: fail and say why.\n    echo \"::error::Could\
