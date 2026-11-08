@@ -1,0 +1,34 @@
+name: QA publication guard proof
+on:
+  push:
+    branches:
+    - master
+    paths:
+    - .github/workflows/qa-publish-guard.yml
+  workflow_dispatch: {}
+permissions:
+  contents: write
+jobs:
+  proof:
+    if: ${{ github.repository == 'julienld/ha-mcp-simple-release-qa-20261108' && github.event_name == 'workflow_dispatch'
+      && vars.QA_ARMED == 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        fetch-depth: 0
+    - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+      with:
+        version: 0.13.4
+    - run: uv run -s .qa/guard_proof.py run --product-sha c4ba165cb831b593fa9bb09e395131b12f0eb41f
+      env:
+        GH_TOKEN: ${{ github.token }}
+        QA_ARMED: ${{ vars.QA_ARMED }}
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      if: ${{ always() }}
+      with:
+        name: publication-guard-proof
+        path: guard-proof.json
+        retention-days: 30
