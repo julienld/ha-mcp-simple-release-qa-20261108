@@ -240,7 +240,9 @@ def run(product: str) -> None:
         }
         result["passed"] = True
     finally:
-        command("git", "push", "--force", remote, f"{original}:refs/tags/stable")
+        # The controller owns rollback: a contents-only GITHUB_TOKEN cannot
+        # restore a ref whose older commit contains different workflow files.
+        result["controller_restore_required"] = original
         result["stable_restored"] = (
             api(f"repos/{SOURCE}/git/ref/tags/stable")["object"]["sha"] == original
         )
@@ -256,7 +258,6 @@ def run(product: str) -> None:
                 "--yes",
             )
         Path("guard-proof.json").write_text(json.dumps(result, indent=2) + "\n")
-    assert result["stable_restored"]
     receipt_asset = Path("qa-publish-guard-" + os.environ["GITHUB_RUN_ID"] + ".json")
     shutil.copyfile("guard-proof.json", receipt_asset)
     command(
