@@ -12,7 +12,7 @@ on:
     - .github/integration-mirror-workflows/**
   workflow_run:
     workflows:
-    - SemVer Release
+    - Release Publish
     - Publish Dev Channel
     types:
     - completed
@@ -63,17 +63,15 @@ jobs:
         \ Dev Channel never built ${GITHUB_SHA}; nothing to pin.\"\n      exit 1\n    fi\n    TRIGGER_WORKFLOW=\"Publish Dev\
         \ Channel\"\n    ;;\nesac\nif [ \"$TRIGGER_CONCLUSION\" = \"skipped\" ]; then\n  echo \"Triggering run was skipped\
         \ in its entirety - nothing to sync.\"\n  echo \"channel=skip\" >> \"$GITHUB_OUTPUT\"\n  exit 0\nfi\nif [ \"$TRIGGER_WORKFLOW\"\
-        \ = \"SemVer Release\" ]; then\n  job=\"Semantic Release\"; leg=stable\nelse\n  job=\"Publish PyPI (dev channel)\"\
+        \ = \"Release Publish\" ]; then\n  job=\"Publish PyPI package\"; leg=stable\nelse\n  job=\"Publish PyPI (dev channel)\"\
         ; leg=dev\nfi\nif ! conclusion=$(gh api \\\n  \"repos/${{ github.repository }}/actions/runs/${TRIGGER_RUN_ID}/jobs?per_page=100\"\
-        \ \\\n  --jq \"[.jobs[] | select(.name == \\\"$job\\\") | .conclusion] | first // empty\"); then\n  if [ \"$leg\"\
-        \ = stable ]; then\n    echo \"::warning::Could not query the triggering run's jobs; failing open.\"\n    echo \"\
-        channel=stable\" >> \"$GITHUB_OUTPUT\"\n  elif [ \"$EVENT\" = workflow_dispatch ]; then\n    # A maintainer asked\
-        \ for this pre-release: fail and say why.\n    echo \"::error::Could not query Publish Dev Channel run ${TRIGGER_RUN_ID}'s\
-        \ jobs.\"\n    exit 1\n  else\n    echo \"::warning::Could not query the triggering run's jobs; skipping this dev\
-        \ build.\"\n    echo \"channel=skip\" >> \"$GITHUB_OUTPUT\"\n  fi\n  exit 0\nfi\necho \"'$job' conclusion: ${conclusion:-<job\
-        \ absent>}\"\nif [ \"$conclusion\" = success ] || { [ \"$leg\" = stable ] && [ -z \"$conclusion\" ]; }; then\n  echo\
-        \ \"channel=$leg\" >> \"$GITHUB_OUTPUT\"\n  echo \"dev_run=$TRIGGER_RUN_ID\" >> \"$GITHUB_OUTPUT\"\nelif [ \"$EVENT\"\
-        \ = workflow_dispatch ]; then\n  echo \"::error::'$job' in Publish Dev Channel run ${TRIGGER_RUN_ID} is ${conclusion:-absent},\
+        \ \\\n  --jq \"[.jobs[] | select(.name == \\\"$job\\\") | .conclusion] | first // empty\"); then\n  if [ \"$EVENT\"\
+        \ = workflow_dispatch ]; then\n    # A maintainer asked for this pre-release: fail and say why.\n    echo \"::error::Could\
+        \ not query Publish Dev Channel run ${TRIGGER_RUN_ID}'s jobs.\"\n    exit 1\n  else\n    echo \"::warning::Could not\
+        \ query the triggering run's jobs; skipping this build.\"\n    echo \"channel=skip\" >> \"$GITHUB_OUTPUT\"\n  fi\n\
+        \  exit 0\nfi\necho \"'$job' conclusion: ${conclusion:-<job absent>}\"\nif [ \"$conclusion\" = success ]; then\n \
+        \ echo \"channel=$leg\" >> \"$GITHUB_OUTPUT\"\n  echo \"dev_run=$TRIGGER_RUN_ID\" >> \"$GITHUB_OUTPUT\"\nelif [ \"\
+        $EVENT\" = workflow_dispatch ]; then\n  echo \"::error::'$job' in Publish Dev Channel run ${TRIGGER_RUN_ID} is ${conclusion:-absent},\
         \ not success; no dev build to pin.\"\n  exit 1\nelse\n  echo \"channel=skip\" >> \"$GITHUB_OUTPUT\"\nfi\n"
     if: ${{ vars.QA_ARMED == 'true' && github.sha != vars.QA_BOOTSTRAP_SHA && (true) }}
   sync:
@@ -103,24 +101,20 @@ jobs:
       id: release
       env:
         TRIGGER_SHA: ${{ github.event.workflow_run.head_sha }}
-      run: "case \"$CHANNEL\" in\n  stable)\n    # The release semantic-release cut from the triggering commit is\n    # the\
-        \ first stable tag that contains it; the newest tag could be\n    # a later release when this run waited in the queue.\
-        \ A recovery\n    # dispatch has no trigger and re-tags the newest. That commit\n    # carries the stamped manifest:\
-        \ snapshot ITS component, not\n    # master's tip. A separate worktree keeps this workflow's own\n    # scripts: a\
-        \ recovery dispatch may target an older tag.\n    stable_tags() { grep -E '^v[0-9]+\\.[0-9]+\\.[0-9]+$' | sort -V;\
-        \ }\n    VER=\"\"\n    if [ -n \"$TRIGGER_SHA\" ]; then\n      VER=$(git tag -l 'v*' --contains \"$TRIGGER_SHA\" |\
-        \ stable_tags | head -n 1)\n    fi\n    if [ -z \"$VER\" ]; then\n      VER=$(git tag -l 'v*' | stable_tags | tail\
-        \ -n 1)\n    fi\n    VER=\"${VER#v}\"\n    SRC=\"$RUNNER_TEMP/release-src\"\n    git worktree add --quiet --detach\
-        \ \"$SRC\" \"v${VER}\"\n    PIN=\"$VER\"\n    TAG=\"v${VER}\"\n    DIST=ha-mcp\n    ;;\n  dev)\n    # Publish Dev\
-        \ Channel uploaded this commit as ha-mcp-dev; pin the\n    # version it uploaded, not a recomputed one.\n    PIN=$(cat\
-        \ \"$RUNNER_TEMP/dev-version/dev-version.txt\")\n    if ! [[ \"$PIN\" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+\\.dev[0-9]+$ ]];\
-        \ then\n      echo \"::error::The dev build reported '${PIN}', not a dev version.\"\n      exit 1\n    fi\n    VER=\"\
-        ${PIN%.dev*}\"\n    TAG=\"v${VER}-dev.${PIN##*.dev}\"\n    DIST=ha-mcp-dev\n    # Snapshot the commit Publish Dev\
-        \ Channel built, not whatever\n    # master has moved on to since; a dispatch builds this commit.\n    if [ -n \"\
-        $TRIGGER_SHA\" ]; then\n      SRC=\"$RUNNER_TEMP/dev-src\"\n      git worktree add --quiet --detach \"$SRC\" \"$TRIGGER_SHA\"\
-        \n    else\n      SRC=.\n    fi\n    ;;\n  *)\n    exit 0\n    ;;\nesac\necho \"Component ${VER}, ${DIST}==${PIN},\
-        \ tag ${TAG}\"\n{\n  echo \"version=$VER\"\n  echo \"pin=$PIN\"\n  echo \"dist=$DIST\"\n  echo \"src=$SRC\"\n  echo\
-        \ \"tag=$TAG\"\n} >> \"$GITHUB_OUTPUT\"\n"
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: "case \"$CHANNEL\" in\n  stable)\n    # Follow the current public stable release, never an unpublished\n    # tag\
+        \ or master's unstamped tip. Queued/recovery runs converge.\n    VER=$(gh release view --repo \"$GITHUB_REPOSITORY\"\
+        \ --json tagName --jq .tagName)\n    VER=\"${VER#v}\"\n    SRC=\"$RUNNER_TEMP/release-src\"\n    git worktree add\
+        \ --quiet --detach \"$SRC\" \"v${VER}\"\n    PIN=\"$VER\"\n    TAG=\"v${VER}\"\n    DIST=ha-mcp\n    ;;\n  dev)\n\
+        \    # Publish Dev Channel uploaded this commit as ha-mcp-dev; pin the\n    # version it uploaded, not a recomputed\
+        \ one.\n    PIN=$(cat \"$RUNNER_TEMP/dev-version/dev-version.txt\")\n    if ! [[ \"$PIN\" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+\\\
+        .dev[0-9]+$ ]]; then\n      echo \"::error::The dev build reported '${PIN}', not a dev version.\"\n      exit 1\n\
+        \    fi\n    VER=\"${PIN%.dev*}\"\n    TAG=\"v${VER}-dev.${PIN##*.dev}\"\n    DIST=ha-mcp-dev\n    # Snapshot the\
+        \ commit Publish Dev Channel built, not whatever\n    # master has moved on to since; a dispatch builds this commit.\n\
+        \    if [ -n \"$TRIGGER_SHA\" ]; then\n      SRC=\"$RUNNER_TEMP/dev-src\"\n      git worktree add --quiet --detach\
+        \ \"$SRC\" \"$TRIGGER_SHA\"\n    else\n      SRC=.\n    fi\n    ;;\n  *)\n    exit 0\n    ;;\nesac\necho \"Component\
+        \ ${VER}, ${DIST}==${PIN}, tag ${TAG}\"\n{\n  echo \"version=$VER\"\n  echo \"pin=$PIN\"\n  echo \"dist=$DIST\"\n\
+        \  echo \"src=$SRC\"\n  echo \"tag=$TAG\"\n} >> \"$GITHUB_OUTPUT\"\n"
     - name: Set up mirror push key
       env:
         DEPLOY_KEY: ${{ secrets.INTEGRATION_MIRROR_DEPLOY_KEY }}
@@ -217,7 +211,7 @@ jobs:
     if: ${{ always() && vars.QA_ARMED == 'true' }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
@@ -226,7 +220,7 @@ jobs:
     - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
       with:
         version: 0.13.4
-    - run: uv run -s .qa/runtime.py receipt
+    - run: uv run -s .qa/record.py
       env:
         QA_NEEDS: ${{ toJSON(needs) }}
         QA_STAGE: ${{ vars.QA_STAGE }}
