@@ -23,7 +23,12 @@ FORK = "julienld/ha-mcp-dev"
 
 
 def command(*args: str, check: bool = True) -> subprocess.CompletedProcess:
-    return subprocess.run(args, check=check, capture_output=True, text=True)
+    result = subprocess.run(args, check=False, capture_output=True, text=True)
+    if check and result.returncode:
+        token = os.environ.get("GH_TOKEN", "")
+        error = result.stderr.replace(token, "[redacted]") if token else result.stderr
+        raise RuntimeError(f"{args[:2]} failed ({result.returncode}): {error}")
+    return result
 
 
 def api(path: str) -> object:
@@ -122,6 +127,7 @@ def run(product: str) -> None:
     )
     assert json.loads(Path("hacs.json").read_text())["zip_release"] is True
     original = api(f"repos/{SOURCE}/git/ref/tags/stable")["object"]["sha"]
+    command("git", "fetch", "--no-tags", "origin", original)
     head = command("git", "rev-parse", "HEAD").stdout.strip()
     tag = "qa-publish-guard-" + os.environ["GITHUB_RUN_ID"]
     remote = f"https://x-access-token:{os.environ['GH_TOKEN']}@github.com/{SOURCE}.git"
