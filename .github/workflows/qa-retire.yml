@@ -1,5 +1,8 @@
 name: QA Retire Container Packages
 on:
+  push:
+    branches: [master]
+    paths: [.github/workflows/qa-retire.yml]
   workflow_dispatch:
     inputs:
       delete:
@@ -10,7 +13,7 @@ permissions:
   packages: write
 jobs:
   retire:
-    if: ${{ github.repository == 'julienld/ha-mcp-simple-release-qa-20261108' }}
+    if: ${{ github.repository == 'julienld/ha-mcp-simple-release-qa-20261108' && github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
