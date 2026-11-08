@@ -189,21 +189,29 @@ jobs:
         \npython3 scripts/stamp_component_version.py \\\n  --component-dir custom_components/ha_mcp_tools \\\n  --version\
         \ \"${VERSION%.dev*}\" --pin \"$VERSION\" --dist ha-mcp-dev\ngit commit --quiet -am \"chore(internal): stamp the component\
         \ for dev build ${VERSION} [skip ci]\"\n"
+    - name: Install uv for the integration archive
+      uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
+      with:
+        version: 0.13.4
+    - name: Build the integration ZIP
+      run: uv run -s scripts/build_component_zip.py
     - name: Create pre-release
       env:
         GH_TOKEN: ${{ github.token }}
         VERSION: ${{ needs.prepare.outputs.dev_version }}
         SHORT_SHA: ${{ needs.prepare.outputs.short_sha }}
-      run: "TAG=\"v${VERSION}\"\n\n# One line per pull request merged since the previous dev build,\n# then the other ways\
-        \ to install this build.\npython3 scripts/build_mirror_release_notes.py \\\n  --dev-pin \"$VERSION\" --dist ha-mcp-dev\
-        \ \\\n  --source \"$GITHUB_SHA\" --source-label \"${GITHUB_REPOSITORY}@${SHORT_SHA}\" \\\n  --out release_notes.md\n\
-        cat >> release_notes.md << EOF\n\n### Other installs\n\n**Docker (dev channel):** \\`docker pull ghcr.io/${GITHUB_REPOSITORY}:dev\\\
-        `\n\n**PyPI (dev channel):** \\`pip install ha-mcp-dev\\`\nEOF\n\n# Delete old pre-release with same tag if exists\n\
-        gh release delete \"$TAG\" --yes 2>/dev/null || true\ngh api -X DELETE \"repos/${GITHUB_REPOSITORY}/git/refs/tags/$TAG\"\
-        \ 2>/dev/null || true\n\n# Forced both ways: a re-run holds this tag from the checkout's\n# fetch, and the remote\
-        \ one stays if its deletion above failed.\ngit tag -f \"$TAG\" HEAD\ngit push --quiet --force \"https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git\"\
-        \ \"refs/tags/$TAG\"\ngh release create \"$TAG\" \\\n  --verify-tag \\\n  --title \"Dev Build $VERSION\" \\\n  --notes-file\
-        \ release_notes.md \\\n  --prerelease\n\necho \"\u2713 Created pre-release $TAG\"\n"
+      run: "TAG=\"v${VERSION}\"\n\nif DRAFT=$(gh release view \"$TAG\" --json isDraft --jq .isDraft); then\n  if [ \"$DRAFT\"\
+        \ = false ]; then\n    echo \"release already published; preserving its assets\"\n    exit 0\n  fi\n  echo \"::error::An\
+        \ incomplete draft exists for ${TAG}; inspect it before retrying.\"\n  exit 1\nfi\n\n# One line per pull request merged\
+        \ since the previous dev build,\n# then the other ways to install this build.\npython3 scripts/build_mirror_release_notes.py\
+        \ \\\n  --dev-pin \"$VERSION\" --dist ha-mcp-dev \\\n  --source \"$GITHUB_SHA\" --source-label \"${GITHUB_REPOSITORY}@${SHORT_SHA}\"\
+        \ \\\n  --out release_notes.md\ncat >> release_notes.md << EOF\n\n### Other installs\n\n**Docker (dev channel):**\
+        \ \\`docker pull ghcr.io/${GITHUB_REPOSITORY}:dev\\`\n\n**PyPI (dev channel):** \\`pip install ha-mcp-dev\\`\nEOF\n\
+        \n# Retry an unpublished tag left by a failed create. Public releases\n# exit above so their assets and download history\
+        \ are preserved.\ngit tag -f \"$TAG\" HEAD\ngit push --quiet --force \"https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git\"\
+        \ \"refs/tags/$TAG\"\ngh release create \"$TAG\" dist/integration/ha_mcp_tools.zip \\\n  --verify-tag \\\n  --title\
+        \ \"Dev Build $VERSION\" \\\n  --notes-file release_notes.md \\\n  --prerelease\n\necho \"\u2713 Created pre-release\
+        \ $TAG\"\n"
   cleanup-old-prereleases:
     name: Cleanup old pre-releases
     needs: create-prerelease
@@ -231,7 +239,7 @@ jobs:
     if: ${{ always() && vars.QA_ARMED == 'true' }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
@@ -240,7 +248,7 @@ jobs:
     - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
       with:
         version: 0.13.4
-    - run: uv run -s .qa/runtime.py receipt
+    - run: uv run -s .qa/record.py
       env:
         QA_NEEDS: ${{ toJSON(needs) }}
         QA_STAGE: ${{ vars.QA_STAGE }}

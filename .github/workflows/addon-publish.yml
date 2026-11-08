@@ -86,7 +86,7 @@ jobs:
     if: ${{ always() && vars.QA_ARMED == 'true' }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
@@ -95,7 +95,7 @@ jobs:
     - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
       with:
         version: 0.13.4
-    - run: uv run -s .qa/runtime.py receipt
+    - run: uv run -s .qa/record.py
       env:
         QA_NEEDS: ${{ toJSON(needs) }}
         QA_STAGE: ${{ vars.QA_STAGE }}
